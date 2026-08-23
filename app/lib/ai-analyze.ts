@@ -236,6 +236,64 @@ function extractChartFromMarkdown(analysis: string, question: string): AnalysisC
 }
 
 /**
+ * 从 Cube.js 查询结果自动生成图表配置。
+ * 不需要依赖 LLM，直接从已有的 query + data 构建。
+ */
+function buildChartFromQuery(
+  query: { measures?: string[]; dimensions?: string[] },
+  data: Record<string, unknown>[],
+  question: string
+): AnalysisContent['chart'] | undefined {
+  if (!data || data.length === 0) return undefined;
+  const dims = query.dimensions || [];
+  if (dims.length === 0) return undefined;
+
+  // 用维度列作为标签
+  const dimKey = dims[0];
+  const labels = data.map((row) => String(row[dimKey] ?? ''));
+  if (labels.length === 0 || labels.every((l) => !l || l === 'undefined')) return undefined;
+
+  // 度量列作为数值
+  const measureKeys = (query.measures || []).filter((m) => m !== dimKey);
+  if (measureKeys.length === 0) return undefined;
+
+  // 判断图表类型
+  let type: 'bar' | 'line' | 'pie' = 'bar';
+  const q = question.toLowerCase();
+  if (q.includes('占比') || q.includes('比例') || q.includes('分布') || q.includes('构成')) {
+    type = 'pie';
+  } else if (q.includes('趋势') || q.includes('变化') || q.includes('走势') || q.includes('月度') || q.includes('季度') || q.includes('同比')) {
+    type = 'line';
+  }
+
+  const series: Array<{ name: string; data: Array<{ label: string; value: number }> }> = measureKeys.map(
+    (mk) => ({
+      name: mk.split('.').pop() || mk,
+      data: labels.map((label) => {
+        // Find the row with matching label
+        const row = data.find((r) => String(r[dimKey] ?? '') === label);
+        const raw = row?.[mk];
+        const val = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw.replace(/[¥￥,\s]/g, '')) || 0 : 0;
+        return { label, value: val };
+      }),
+    })
+  );
+
+  // 确保数据不为空
+  const hasData = series.some((s) => s.data.some((d) => d.value !== 0));
+  if (!hasData) return undefined;
+
+  const labelName = dims.map((d) => d.split('.').pop() || d).join(' × ');
+  const measureNames = series.map((s) => s.name).join('、');
+
+  return {
+    type,
+    title: `${labelName} ${measureNames}`,
+    series,
+  };
+}
+
+/**
  * 主入口：两阶段 tool-calling 分析
  */
 export async function analyzeWithCube(
@@ -280,6 +338,10 @@ export async function analyzeWithCube(
     content: string;
   }> = [];
 
+  // Collect last successful query for auto-chart generation
+  let lastQuery: { measures?: string[]; dimensions?: string[] } | undefined;
+  let lastData: Record<string, unknown>[] = [];
+
   for (const toolCall of msg1.tool_calls) {
     try {
       const args = JSON.parse(toolCall.function.arguments);
@@ -294,6 +356,8 @@ export async function analyzeWithCube(
 
       const response: CubeResponse = await cubeLoad(query);
       const limitedData = response.data.slice(0, 100);
+      lastQuery = { measures: args.measures, dimensions: args.dimensions };
+      lastData = limitedData;
       toolResponses.push({
         role: 'tool',
         tool_call_id: toolCall.id,
@@ -343,11 +407,23 @@ export async function analyzeWithCube(
     // Fall through to plain text
   }
 
-  // LLM didn't return JSON — try to extract chart from Markdown table
+  // LLM didn't return JSON — try fallback chart extraction
   const result: AnalysisContent = { analysis: cleaned || '查询完成。' };
+
+  // Second try: extract from Markdown table
   const extractedChart = extractChartFromMarkdown(result.analysis, question);
   if (extractedChart) {
     result.chart = extractedChart;
+    return result;
+  }
+
+  // Third try: auto-generate chart from Cube.js query results
+  if (lastQuery) {
+    const autoChart = buildChartFromQuery(lastQuery, lastData, question);
+    if (autoChart) {
+      result.chart = autoChart;
+      return result;
+    }
   }
 
   return result;

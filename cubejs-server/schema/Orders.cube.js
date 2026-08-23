@@ -1,3 +1,13 @@
+// 根据部署环境自动选择 SQL 语法
+//   本地 (SQLite): 使用 strftime()
+//   部署 (Postgres): 使用 to_char()
+const { hasPostgres } = require('../db-config');
+const fmtMonth = hasPostgres ? `to_char(order_date, 'YYYY-MM')` : `strftime('%Y-%m', order_date)`;
+const fmtQuarter = hasPostgres
+  ? `to_char(order_date, 'YYYY') || '-Q' || to_char(order_date, 'Q')`
+  : `substr(strftime('%Y-%m', order_date), 1, 4) || '-Q' || ((CAST(strftime('%m', order_date) AS INTEGER) - 1) / 3 + 1)`;
+const fmtYear = hasPostgres ? `to_char(order_date, 'YYYY')` : `strftime('%Y', order_date)`;
+
 cube(`Orders`, {
   sql: `SELECT * FROM orders`,
 
@@ -52,17 +62,17 @@ cube(`Orders`, {
       title: `订单日期`,
     },
     orderDateMonth: {
-      sql: `strftime('%Y-%m', order_date)`,
+      sql: fmtMonth,
       type: `string`,
       title: `订单月份`,
     },
     orderDateQuarter: {
-      sql: `strftime('%Y-Q', order_date)`,
+      sql: fmtQuarter,
       type: `string`,
       title: `订单季度`,
     },
     orderDateYear: {
-      sql: `strftime('%Y', order_date)`,
+      sql: fmtYear,
       type: `string`,
       title: `订单年份`,
     },

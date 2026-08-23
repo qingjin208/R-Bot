@@ -4,11 +4,14 @@
   "description": "Official Cube.js data service for R-Bot",
   "scripts": {
     "init-db": "node init-db.js",
+    "init-db-postgres": "node init-db-postgres.js",
     "server": "node cube.js"
   },
   "dependencies": {
+    "@cubejs-backend/postgres-driver": "^1.4.4",
     "@cubejs-backend/server": "^1.4.4",
     "@cubejs-backend/sqlite-driver": "^1.4.4",
-    "better-sqlite3": "^11.0.0"
+    "better-sqlite3": "^11.0.0",
+    "pg": "^8.23.0"
   }
 }
