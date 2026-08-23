@@ -1,0 +1,36 @@
+# Koyeb 部署配置
+# 推送到 GitHub 后，在 Koyeb 控制台 → Add Service → Git Connect 即可部署
+name: rbot-cubejs
+services:
+  - name: cubejs
+    git:
+      gitRepository:
+        github:
+          repository: qingjin208/R-Bot
+          branch: koyeb
+    instances:
+      minimum: 1
+      maximum: 1
+    verticalScaling:
+      cpu:
+        size: 0.25
+      memory:
+        size: 256
+    ports:
+      - port: 4000
+        name: http
+        protocol: http
+    routes:
+      - path: /
+    env:
+      - scope: RUNTIME
+        key: PORT
+        value: "4000"
+    secrets:
+      - name: SQL_HOST
+      - name: SQL_PORT
+      - name: SQL_DATABASE
+      - name: SQL_USER
+      - name: SQL_PASSWORD
+      - name: CUBEJS_DB_TYPE
+      - name: CUBEJS_JWT_SECRET
