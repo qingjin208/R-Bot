@@ -1,0 +1,14 @@
+{
+  "name": "cubejs-server",
+  "version": "1.0.0",
+  "description": "Official Cube.js data service for R-Bot",
+  "scripts": {
+    "init-db": "node init-db.js",
+    "server": "node cube.js"
+  },
+  "dependencies": {
+    "@cubejs-backend/server": "^1.4.4",
+    "@cubejs-backend/sqlite-driver": "^1.4.4",
+    "better-sqlite3": "^11.0.0"
+  }
+}

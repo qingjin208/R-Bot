@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Message, ProviderConfig } from "@/app/types";
+import { analyzeWithCube } from "@/app/lib/ai-analyze";
 
 // 强制使用 Node.js runtime，便于进行流式响应和 HTTP 代理
 export const runtime = "nodejs";
@@ -8,18 +9,6 @@ export const dynamic = "force-dynamic";
 interface ChatRequestBody {
   messages: Message[];
   provider: ProviderConfig;
-}
-
-function trimTrailingSlash(s: string): string {
-  return s.replace(/\/+$/, "");
-}
-
-function buildEndpoint(baseUrl: string, apiFormat: ProviderConfig["apiFormat"]): string {
-  const base = trimTrailingSlash(baseUrl);
-  // 已包含完整路径则原样使用
-  if (/\/chat\/completions$/.test(base) || /\/messages$/.test(base)) return base;
-  // 否则按格式拼接
-  return apiFormat === "anthropic" ? `${base}/messages` : `${base}/chat/completions`;
 }
 
 export async function POST(req: NextRequest) {
@@ -54,80 +43,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const endpoint = buildEndpoint(provider.baseUrl, provider.apiFormat);
-  const apiFormat = provider.apiFormat || "openai";
-
+  // ── Always run through analyzeWithCube: LLM decides whether to use Cube.js tool ──
   try {
-    if (apiFormat === "anthropic") {
-      // Anthropic Messages API 格式
-      const systemMsg = messages.find((m) => m.role === "system");
-      const userMessages = messages
-        .filter((m) => m.role !== "system")
-        .map((m) => ({ role: m.role, content: m.content }));
-
-      const anthropicRes = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": provider.apiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: provider.model,
-          max_tokens: 2048,
-          system: systemMsg?.content,
-          messages: userMessages,
-        }),
-        signal: req.signal,
-      });
-
-      if (!anthropicRes.ok) {
-        const errText = await anthropicRes.text().catch(() => "");
-        return NextResponse.json(
-          { error: `Provider returned ${anthropicRes.status}: ${errText.slice(0, 500)}` },
-          { status: anthropicRes.status }
-        );
-      }
-      const data = await anthropicRes.json();
-      const content = data?.content?.[0]?.text ?? "";
-      return NextResponse.json({ content });
-    }
-
-    // OpenAI 兼容格式（含 SenseNova / OpenAI / 其它兼容服务）
-    const openaiRes = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${provider.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: provider.model,
-        messages: messages.map((m) => ({ role: m.role, content: m.content })),
-        stream: false,
-      }),
-      signal: req.signal,
-    });
-
-    if (!openaiRes.ok) {
-      const errText = await openaiRes.text().catch(() => "");
-      return NextResponse.json(
-        { error: `Provider returned ${openaiRes.status}: ${errText.slice(0, 500)}` },
-        { status: openaiRes.status }
-      );
-    }
-
-    const data = await openaiRes.json();
-    const content = data?.choices?.[0]?.message?.content ?? "";
-    if (!content) {
-      return NextResponse.json(
-        { error: "Provider returned an empty response.", raw: data },
-        { status: 502 }
-      );
-    }
+    const content = await analyzeWithCube(messages, provider, req.signal);
     return NextResponse.json({ content });
   } catch (err) {
     return NextResponse.json(
-      { error: `Network error: ${err instanceof Error ? err.message : String(err)}` },
+      { error: `请求失败: ${err instanceof Error ? err.message : String(err)}` },
       { status: 502 }
     );
   }

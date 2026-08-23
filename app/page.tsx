@@ -6,7 +6,7 @@ import { Header } from "@/app/components/Header";
 import { MessageInput } from "@/app/components/MessageInput";
 import { MessageList } from "@/app/components/MessageList";
 import { useI18n } from "@/app/contexts/I18nContext";
-import { Conversation, Message } from "@/app/types";
+import { Conversation, Message, AnalysisContent } from "@/app/types";
 import { loadProvider } from "@/app/lib/settings";
 import { sendChatMessage } from "@/app/lib/chat";
 import { MarkdownBody } from "@/app/components/MarkdownBody";

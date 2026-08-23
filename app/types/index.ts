@@ -1,7 +1,19 @@
+export interface AnalysisChart {
+  type: "bar" | "line" | "pie";
+  title: string;
+  series: Array<{ name: string; data: Array<{ label: string; value: number }> }>;
+  unit?: string;
+}
+
+export interface AnalysisContent {
+  chart?: AnalysisChart;
+  analysis: string;
+}
+
 export interface Message {
   id: string;
   role: "user" | "assistant" | "system";
-  content: string;
+  content: string | AnalysisContent;
   timestamp: number;
 }
 

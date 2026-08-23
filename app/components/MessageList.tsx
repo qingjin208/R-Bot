@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Message } from "@/app/types";
+import { Message, AnalysisContent } from "@/app/types";
 import { MarkdownBody } from "./MarkdownBody";
+import { EChartWrapper } from "./EChartWrapper";
 
 interface UserMessageProps {
   text: string;
@@ -23,11 +24,17 @@ function UserMessage({ text, delay }: UserMessageProps) {
 }
 
 interface AIMessageProps {
-  text?: string;
+  text?: string | AnalysisContent;
   delay?: string;
 }
 
 function AIMessage({ text, delay }: AIMessageProps) {
+  const isChart =
+    typeof text === "object" && text !== null && "chart" in text && !!text.chart;
+  const isAnalysis =
+    typeof text === "object" && text !== null && "analysis" in text;
+  const isStr = typeof text === "string";
+
   return (
     <div className="msg-in flex gap-3 items-start" style={{ animationDelay: delay }}>
       {/* AI Avatar */}
@@ -43,9 +50,10 @@ function AIMessage({ text, delay }: AIMessageProps) {
 
       {/* Message Content */}
       <div className="flex-1 min-w-0 space-y-3">
-        <div className="glass-strong rounded-2xl rounded-tl-md p-4 shadow-[0_4px_20px_rgba(51,65,85,0.05)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.2)]">
-          {/* Markdown 渲染 */}
-          {text && <MarkdownBody text={text} />}
+        {isChart && text && <EChartWrapper chart={text.chart!} />}
+        <div className="glass-strong rounded-2xl rounded-tl-md p-4 shadow-[0_4px_20px_trajectory(51,65,85,0.05)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.2)]">
+          {isStr && <MarkdownBody text={text} />}
+          {isAnalysis && text && <MarkdownBody text={text.analysis} />}
         </div>
       </div>
     </div>
@@ -92,7 +100,13 @@ export function MessageList({ messages, isTyping }: MessageListProps) {
         {messages.map((msg, index) => {
           const delay = `${Math.min(index * 0.05, 0.3)}s`;
           if (msg.role === "user") {
-            return <UserMessage key={msg.id} text={msg.content} delay={delay} />;
+            const userText =
+              typeof msg.content === "string"
+                ? msg.content
+                : "New Chat";
+            return (
+              <UserMessage key={msg.id} text={userText} delay={delay} />
+            );
           }
           return <AIMessage key={msg.id} text={msg.content} delay={delay} />;
         })}

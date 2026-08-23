@@ -1,6 +1,6 @@
 "use client";
 
-import { Message, ProviderConfig } from "@/app/types";
+import { Message, ProviderConfig, AnalysisContent } from "@/app/types";
 
 export function generateId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
@@ -18,7 +18,10 @@ export function createMessage(role: Message["role"], content: string): Message {
 export function createChatSessionTitle(messages: Message[]): string {
   const firstUser = messages.find((m) => m.role === "user");
   if (!firstUser) return "New Chat";
-  const text = firstUser.content.trim();
+  const text =
+    typeof firstUser.content === "string"
+      ? firstUser.content.trim()
+      : "New Chat";
   return text.length > 24 ? `${text.slice(0, 24)}…` : text || "New Chat";
 }
 
@@ -36,7 +39,7 @@ export async function sendChatMessage(
   messages: Message[],
   provider: ProviderConfig | null,
   signal?: AbortSignal
-): Promise<{ content: string; error?: ChatError }> {
+): Promise<{ content: string | AnalysisContent; error?: ChatError }> {
   if (!provider || !provider.apiKey || !provider.apiKey.trim()) {
     return {
       content:
@@ -53,7 +56,7 @@ export async function sendChatMessage(
       signal,
     });
 
-    let data: { content?: string; error?: string } = {};
+    let data: { content?: string | AnalysisContent; error?: string } = {};
     try {
       data = await res.json();
     } catch {
@@ -68,7 +71,13 @@ export async function sendChatMessage(
       };
     }
 
-    const content = (data.content || "").trim();
+    const raw = data.content;
+    let content: string | AnalysisContent = "";
+    if (typeof raw === "string") {
+      content = raw.trim();
+    } else if (raw && typeof raw === "object" && "analysis" in raw) {
+      content = { ...raw, analysis: raw.analysis.trim() };
+    }
     if (!content) {
       return {
         content: "AI 服务返回了空内容，请稍后重试或更换模型。",
