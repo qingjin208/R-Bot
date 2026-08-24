@@ -48,6 +48,29 @@ const SYSTEM_PROMPT = `你是一个业务数据分析助手，专注于通过数
 闲聊时直接回复普通文本，不需要返回 JSON。`;
 
 // ──────────────────────────────────────────────
+// Round 2 prompt — tool call is DONE, force final JSON analysis
+// ──────────────────────────────────────────────
+const FINAL_ANALYSIS_PROMPT = `你是一个业务数据分析助手。cube_query 工具已经调用完成，真实查询数据已以 tool 消息形式附在对话中。
+
+你的任务：基于这些真实数据撰写最终分析报告。不要再调用任何工具，直接输出结论。
+
+【重要】你的回复必须使用以下 **严格 JSON 格式**，不要使用代码块包裹，直接输出 JSON：
+
+{"chart":{"type":"bar","title":"图表标题","series":[{"name":"指标名称","data":[{"label":"分类名称","value":数值}]}]},"analysis":"Markdown 格式的分析报告文本"}
+
+字段说明：
+- chart.type: 图表类型，可选 "bar"(柱状图-用于分类对比)、"line"(折线图-用于时间趋势)、"pie"(饼图-用于占比分析)
+- chart.title: 图表标题
+- chart.series: 数据系列数组，最多 3 个 series
+  - 每个 series.name: 系列名称（如"销售额"）
+  - 每个 series.data: 数据点数组，最多 15 项
+    - 每个 data.label: 分类标签（如"华南"）
+    - 每个 data.value: 数值
+- analysis: 用 Markdown 格式写分析报告，包含关键结论，可以包含表格
+
+必须只输出一个 JSON 对象，不能输出其他任何文字。`;
+
+// ──────────────────────────────────────────────
 // Tool definition sent to the LLM
 // ──────────────────────────────────────────────
 const CUBE_TOOL = {
@@ -311,8 +334,9 @@ export async function analyzeWithCube(
   }
 
   // ── Round 2: LLM + tool results ─────────────
+  // 注意：不再传 tools —— 避免 LLM 再次调用工具而不产出最终分析
   const round2Messages: unknown[] = [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: FINAL_ANALYSIS_PROMPT },
     { role: 'user', content: question },
     {
       role: 'assistant',
@@ -322,11 +346,19 @@ export async function analyzeWithCube(
     ...toolResponses,
   ];
 
-  const res2 = await callLLM(provider, round2Messages, signal, {
-    tools: [CUBE_TOOL],
-  });
+  const res2 = await callLLM(provider, round2Messages, signal);
 
   const msg2 = res2.choices?.[0]?.message ?? { content: null };
+
+  // 防御：如果 LLM 仍然试图调用工具（不应发生，已不传 tools），明确提示
+  const toolCalls2 = (msg2 as { tool_calls?: unknown[] }).tool_calls;
+  if (toolCalls2 && toolCalls2.length > 0) {
+    return {
+      analysis:
+        '模型在第二轮仍尝试调用工具，未能生成分析报告。请重试或更换模型。',
+    };
+  }
+
   const raw = msg2.content || '';
 
   // Try to parse as structured JSON
@@ -344,7 +376,11 @@ export async function analyzeWithCube(
   }
 
   // LLM didn't return JSON — try to extract chart from Markdown table
-  const result: AnalysisContent = { analysis: cleaned || '查询完成。' };
+  const result: AnalysisContent = {
+    analysis:
+      cleaned ||
+      '查询已完成，但模型未能生成分析报告（返回内容为空）。请重试或更换模型。',
+  };
   const extractedChart = extractChartFromMarkdown(result.analysis, question);
   if (extractedChart) {
     result.chart = extractedChart;
