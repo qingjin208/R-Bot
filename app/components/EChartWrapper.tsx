@@ -34,7 +34,7 @@ function BarChart({ chart }: { chart: AnalysisChart }) {
           <g key={f}>
             <line x1={PL} x2={W - PR} y1={y} y2={y} stroke="#334155" strokeDasharray="2,3" />
             <text x={PL - 6} y={y + 3} textAnchor="end" fill="#64748B" fontSize="9">
-              {val >= 10000 ? `${(val / 10000).toFixed(0)}万` : val.toLocaleString()}
+              {val >= 1000 ? `${(val / 1000).toFixed(0)}K` : val.toLocaleString()}
             </text>
           </g>
         );
@@ -60,8 +60,8 @@ function BarChart({ chart }: { chart: AnalysisChart }) {
               fill="#CBD5E1"
               fontSize="9"
             >
-              {series[0].data[li].value >= 10000
-                ? `${(series[0].data[li].value / 10000).toFixed(1)}万`
+              {series[0].data[li].value >= 1000
+                ? `${(series[0].data[li].value / 1000).toFixed(1)}K`
                 : series[0].data[li].value.toLocaleString()}
             </text>
             <text
@@ -110,7 +110,7 @@ function LineChart({ chart }: { chart: AnalysisChart }) {
           <g key={f}>
             <line x1={PL} x2={W - PR} y1={y} y2={y} stroke="#334155" strokeDasharray="2,3" />
             <text x={PL - 6} y={y + 3} textAnchor="end" fill="#64748B" fontSize="9">
-              {val >= 10000 ? `${(val / 10000).toFixed(0)}万` : val.toLocaleString()}
+              {val >= 1000 ? `${(val / 1000).toFixed(0)}K` : val.toLocaleString()}
             </text>
           </g>
         );
@@ -184,7 +184,7 @@ function PieChart({ chart }: { chart: AnalysisChart }) {
         {title}
       </text>
       <text x={cx} y={cy - 4} textAnchor="middle" fill="#E2E8F0" fontSize="16" fontWeight="600">
-        {total >= 10000 ? `${(total / 10000).toFixed(1)}万` : total.toLocaleString()}
+        {total >= 1000 ? `${(total / 1000).toFixed(1)}K` : total.toLocaleString()}
       </text>
 
       {slices.map((s, i) => (

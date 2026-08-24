@@ -7,68 +7,72 @@ import { CubeQuery, CubeResponse, cubeLoad } from './cube-client';
 // ──────────────────────────────────────────────
 // System prompt describing the data schema + output rules
 // ──────────────────────────────────────────────
-const SYSTEM_PROMPT = `你是一个业务数据分析助手，专注于通过数据回答问题。你有一个数据分析工具可以查询销售数据。
+const SYSTEM_PROMPT = `You are a business data analysis assistant focused on answering questions with data. You have a data analysis tool to query sales data.
 
-数据仓库包含以下信息：
+The data warehouse contains the following information:
 
-表：Orders（订单表，2023-01-01 至 2024-12-31，约 8851 条订单）
+Table: Orders (order table, 2023-01-01 to 2024-12-31, about 8851 orders)
   Measures:
-  - Orders.totalAmount: 销售额 (SUM)
-  - Orders.orderCount: 订单数 (COUNT)
-  - Orders.avgAmount: 平均客单价 (AVG)
-  - Orders.totalQuantity: 总销售数量 (SUM)
+  - Orders.totalAmount: total sales amount (SUM)
+  - Orders.orderCount: order count (COUNT)
+  - Orders.avgAmount: average order value (AVG)
+  - Orders.totalQuantity: total quantity sold (SUM)
   Dimensions:
-  - Orders.region: 地区 (华北/华东/华南/华中/西南/西北)
-  - Orders.orderDateMonth: 订单月份 (按 YYYY-MM 聚合)
-  - Orders.orderDateQuarter: 订单季度 (按 YYYY-Q 聚合)
-  - Orders.orderDateYear: 订单年份 (按 YYYY 聚合)
-  - Orders.status: 订单状态 (completed/shipped/pending/cancelled)
-  - Orders.productCategory: 产品类别 (电子产品/办公家具/图书/数码配件)
-  - Orders.customerName: 客户名称
-  - Orders.customerCity: 客户城市
-  - Orders.productName: 产品名称
+  - Orders.region: region (North/ East/ South/ Central/ Southwest/ Northwest China)
+  - Orders.orderDateMonth: order month (aggregated as YYYY-MM)
+  - Orders.orderDateQuarter: order quarter (aggregated as YYYY-Q)
+  - Orders.orderDateYear: order year (aggregated as YYYY)
+  - Orders.status: order status (completed/ shipped/ pending/ cancelled)
+  - Orders.productCategory: product category (Electronics/ Office Furniture/ Books/ Digital Accessories)
+  - Orders.customerName: customer name
+  - Orders.customerCity: customer city
+  - Orders.productName: product name
 
-当用户问与数据相关的问题时，使用 cube_query 工具查询数据，然后根据查询结果给出分析报告。
-如果用户只是闲聊或打招呼，直接回复，不要使用工具。
+When the user asks a data-related question, use the cube_query tool to query data, then provide an analysis report based on the results.
+If the user is just chatting or greeting, reply directly without using the tool.
 
-【重要】你的回复必须使用以下 **严格 JSON 格式**，不要使用代码块包裹，直接输出 JSON：
+[CRITICAL LANGUAGE RULE] ALWAYS reply in English only. Do NOT match the user's input language. Even if the user writes in Chinese or any other language, you MUST keep every part of the output — including chart titles, series names, labels, category labels, column headers, table cells, and analysis text — in English.
 
-{"chart":{"type":"bar","title":"图表标题","series":[{"name":"指标名称","data":[{"label":"分类名称","value":数值}]}]},"analysis":"Markdown 格式的分析报告文本"}
+[IMPORTANT] Your reply MUST use the following STRICT JSON format. Do not wrap it in a code block; output the JSON directly:
 
-字段说明：
-- chart.type: 图表类型，可选 "bar"(柱状图-用于分类对比)、"line"(折线图-用于时间趋势)、"pie"(饼图-用于占比分析)
-- chart.title: 图表标题
-- chart.series: 数据系列数组，最多 3 个 series
-  - 每个 series.name: 系列名称（如"销售额"）
-  - 每个 series.data: 数据点数组，最多 15 项
-    - 每个 data.label: 分类标签（如"华南"）
-    - 每个 data.value: 数值
-- analysis: 用 Markdown 格式写分析报告，包含关键结论，可以包含表格
+{"chart":{"type":"bar","title":"Chart Title","series":[{"name":"Metric Name","data":[{"label":"Category Label","value":Number}]}]},"analysis":"Analysis report text in Markdown format"}
 
-闲聊时直接回复普通文本，不需要返回 JSON。`;
+Field descriptions:
+- chart.type: chart type, one of "bar" (bar chart - for category comparison), "line" (line chart - for time trends), "pie" (pie chart - for proportion analysis)
+- chart.title: chart title
+- chart.series: array of data series, up to 3 series
+  - each series.name: series name (e.g. "Sales Amount")
+  - each series.data: array of data points, up to 15 items
+    - each data.label: category label (e.g. "South China")
+    - each data.value: numeric value
+- analysis: analysis report in Markdown format, including key conclusions; tables are allowed
+
+When chatting, reply with plain text directly; no JSON needed.`;
 
 // ──────────────────────────────────────────────
 // Round 2 prompt — tool call is DONE, force final JSON analysis
 // ──────────────────────────────────────────────
-const FINAL_ANALYSIS_PROMPT = `你是一个业务数据分析助手。cube_query 工具已经调用完成，真实查询数据已以 tool 消息形式附在对话中。
+const FINAL_ANALYSIS_PROMPT = `You are a business data analysis assistant. The cube_query tool has already been called, and the real query results are attached as tool messages in the conversation.
 
-你的任务：基于这些真实数据撰写最终分析报告。不要再调用任何工具，直接输出结论。
+Your task: write the final analysis report based on this real data. Do not call any tool again; output conclusions directly.
 
-【重要】你的回复必须使用以下 **严格 JSON 格式**，不要使用代码块包裹，直接输出 JSON：
+[CRITICAL LANGUAGE RULE] ALWAYS reply in English only. Do NOT match the user's input language. Even if the user writes in Chinese or any other language, you MUST keep every part of the output — including chart titles, series names, labels, category labels, column headers, table cells, and analysis text — in English.
 
-{"chart":{"type":"bar","title":"图表标题","series":[{"name":"指标名称","data":[{"label":"分类名称","value":数值}]}]},"analysis":"Markdown 格式的分析报告文本"}
+[IMPORTANT] Your reply MUST use the following STRICT JSON format. Do not wrap it in a code block; output the JSON directly:
 
-字段说明：
-- chart.type: 图表类型，可选 "bar"(柱状图-用于分类对比)、"line"(折线图-用于时间趋势)、"pie"(饼图-用于占比分析)
-- chart.title: 图表标题
-- chart.series: 数据系列数组，最多 3 个 series
-  - 每个 series.name: 系列名称（如"销售额"）
-  - 每个 series.data: 数据点数组，最多 15 项
-    - 每个 data.label: 分类标签（如"华南"）
-    - 每个 data.value: 数值
-- analysis: 用 Markdown 格式写分析报告，包含关键结论，可以包含表格
+{"chart":{"type":"bar","title":"Chart Title","series":[{"name":"Metric Name","data":[{"label":"Category Label","value":Number}]}]},"analysis":"Analysis report text in Markdown format"}
 
-必须只输出一个 JSON 对象，不能输出其他任何文字。`;
+Field descriptions:
+- chart.type: chart type, one of "bar" (bar chart - for category comparison), "line" (line chart - for time trends), "pie" (pie chart - for proportion analysis)
+- chart.title: chart title
+- chart.series: array of data series, up to 3 series
+  - each series.name: series name (e.g. "Sales Amount")
+  - each series.data: array of data points, up to 15 items
+    - each data.label: category label (e.g. "South China")
+    - each data.value: numeric value
+- analysis: analysis report in Markdown format, including key conclusions; tables are allowed
+
+Output exactly one JSON object and nothing else.`;
 
 // ──────────────────────────────────────────────
 // Tool definition sent to the LLM
@@ -78,7 +82,7 @@ const CUBE_TOOL = {
   function: {
     name: 'cube_query',
     description:
-      '查询销售数据分析结果。当用户问及销售额、订单、客户、产品、趋势等数据相关问题时使用此工具。',
+      'Query sales data analysis results. Use this tool when the user asks about sales amount, orders, customers, products, trends, or other data-related questions.',
     parameters: {
       type: 'object',
       properties: {
@@ -86,46 +90,46 @@ const CUBE_TOOL = {
           type: 'array',
           items: { type: 'string' },
           description:
-            '要查询的度量值，如 Orders.totalAmount、Orders.orderCount、Orders.avgAmount、Orders.totalQuantity',
+            'Measures to query, e.g. Orders.totalAmount, Orders.orderCount, Orders.avgAmount, Orders.totalQuantity',
         },
         dimensions: {
           type: 'array',
           items: { type: 'string' },
           description:
-            '要按哪些维度分组，如 Orders.region、Orders.orderDateMonth、Orders.orderDateQuarter、Orders.orderDateYear、Orders.status、Orders.productCategory、Orders.customerName、Orders.productName、Orders.customerCity',
+            'Dimensions to group by, e.g. Orders.region, Orders.orderDateMonth, Orders.orderDateQuarter, Orders.orderDateYear, Orders.status, Orders.productCategory, Orders.customerName, Orders.productName, Orders.customerCity',
         },
         filters: {
           type: 'array',
           items: {
             type: 'object',
             properties: {
-              member: { type: 'string', description: '筛选字段，如 Orders.status' },
+              member: { type: 'string', description: 'Filter field, e.g. Orders.status' },
               operator: {
                 type: 'string',
-                description: '运算符: equals/notEquals/greaterThan/lessThan/in',
+                description: 'Operator: equals/ notEquals/ greaterThan/ lessThan/ in',
               },
-              value: { description: '筛选值' },
+              value: { description: 'Filter value' },
             },
             required: ['member', 'operator', 'value'],
           },
-          description: '可选的筛选条件',
+          description: 'Optional filter conditions',
         },
         order: {
           type: 'object',
           properties: {
-            measure: { type: 'string', description: '排序字段，如 Orders.totalAmount' },
+            measure: { type: 'string', description: 'Sort field, e.g. Orders.totalAmount' },
             direction: { type: 'string', enum: ['asc', 'desc'] },
           },
-          description: '排序规则',
+          description: 'Sort rule',
         },
         chartType: {
           type: 'string',
           enum: ['pie', 'bar', 'line', 'table'],
-          description: '期望的图表类型（仅供参考，最终输出为 Markdown 表格）。',
+          description: 'Desired chart type (for reference only; the final output is a Markdown table).',
         },
         limit: {
           type: 'number',
-          description: '返回行数限制',
+          description: 'Row limit for the result',
         },
       },
       required: ['measures', 'dimensions'],
@@ -185,17 +189,17 @@ async function callLLM(
 
   if (!res.ok) {
     const errText = await res.text().catch(() => '');
-    throw new Error(`AI 调用失败 (${res.status}): ${errText.slice(0, 300)}`);
+    throw new Error(`AI call failed (${res.status}): ${errText.slice(0, 300)}`);
   }
 
   return res.json();
 }
 
 /**
- * 从 Markdown 表格提取数据，生成 chart 配置。
+ * Extract chart data from a Markdown table and build a chart config.
  */
 function extractChartFromMarkdown(analysis: string, question: string): AnalysisContent['chart'] | undefined {
-  // 找 Markdown 表格
+  // Find a Markdown table
   const tableRegex = /^\|(.+)\|\s*\n\|[-:\s|]+\|\s*\n((?:\|.+\|\s*\n?)+)/m;
   const match = analysis.match(tableRegex);
   if (!match) return undefined;
@@ -208,21 +212,21 @@ function extractChartFromMarkdown(analysis: string, question: string): AnalysisC
 
   if (dataRows.length === 0 || headerRow.length < 2) return undefined;
 
-  // 判断第一列是否是标签列（非数字），如果不是则尝试第二列
+  // Determine whether the first column is a label column (non-numeric); if not, try the second
   let labelColIdx = 0;
-  if (!isNaN(parseFloat(headerRow[0])) && headerRow[0] !== '排名') {
-    // 第一列可能是数值
+  if (!isNaN(parseFloat(headerRow[0])) && headerRow[0].toLowerCase() !== 'rank') {
+    // First column may be numeric
     if (headerRow.length > 1 && isNaN(parseFloat(headerRow[1]))) {
       labelColIdx = 1;
     }
   }
   const labelCol = headerRow[labelColIdx];
 
-  // 找一个数值列（跳过标签列）
+  // Find a numeric column (skip the label column)
   let valueColIdx = -1;
   for (let i = 0; i < headerRow.length; i++) {
     if (i === labelColIdx) continue;
-    const val = parseFloat((dataRows[0][i] || '').replace(/[,\s¥￥]/g, ''));
+    const val = parseFloat((dataRows[0][i] || '').replace(/[,\s¥￥%]/g, ''));
     if (!isNaN(val) && val !== 0) {
       valueColIdx = i;
       break;
@@ -240,16 +244,16 @@ function extractChartFromMarkdown(analysis: string, question: string): AnalysisC
 
   if (data.length === 0) return undefined;
 
-  // 根据问题关键词判断图表类型
+  // Determine chart type from question keywords
   let type: 'bar' | 'line' | 'pie' = 'bar';
   const q = question.toLowerCase();
-  if (q.includes('占比') || q.includes('比例') || q.includes('构成') || q.includes('分布')) {
+  if (q.match(/share|ratio|composition|distribution|breakdown/)) {
     type = 'pie';
-  } else if (q.includes('趋势') || q.includes('变化') || q.includes('走势') || q.includes('月度') || q.includes('季度')) {
+  } else if (q.match(/trend|change|over time|monthly|quarterly/)) {
     type = 'line';
   }
 
-  const title = `按 ${labelCol} 的 ${valueCol}`;
+  const title = `${valueCol} by ${labelCol}`;
 
   return {
     type,
@@ -259,7 +263,7 @@ function extractChartFromMarkdown(analysis: string, question: string): AnalysisC
 }
 
 /**
- * 主入口：两阶段 tool-calling 分析
+ * Main entry: two-phase tool-calling analysis
  */
 export async function analyzeWithCube(
   messages: Message[],
@@ -267,13 +271,13 @@ export async function analyzeWithCube(
   signal?: AbortSignal
 ): Promise<AnalysisContent> {
   if (provider.apiFormat !== 'openai') {
-    return { analysis: '数据分析模式需要 OpenAI 兼容格式的 API。请在设置中将 API 格式切换为 OpenAI 格式后重试。' };
+    return { analysis: 'Data analysis mode requires an OpenAI-compatible API format. Please switch the API format to OpenAI in settings and try again.' };
   }
 
   const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
-  if (!lastUserMsg) return { analysis: '请先输入一个问题。' };
+  if (!lastUserMsg) return { analysis: 'Please enter a question first.' };
 
-  const question = typeof lastUserMsg.content === 'string' ? lastUserMsg.content : '请先输入一个问题。';
+  const question = typeof lastUserMsg.content === 'string' ? lastUserMsg.content : 'Please enter a question first.';
 
   // ── Round 1: LLM + tool ─────────────────────
   const round1Messages: Array<{
@@ -293,7 +297,7 @@ export async function analyzeWithCube(
 
   // No tool calls → LLM just chatted
   if (!msg1.tool_calls || msg1.tool_calls.length === 0) {
-    return { analysis: msg1.content || '暂无回复。' };
+    return { analysis: msg1.content || 'No reply yet.' };
   }
 
   // ── Execute tool calls ──────────────────────
@@ -334,7 +338,7 @@ export async function analyzeWithCube(
   }
 
   // ── Round 2: LLM + tool results ─────────────
-  // 注意：不再传 tools —— 避免 LLM 再次调用工具而不产出最终分析
+  // Note: tools are no longer passed — prevents the LLM from calling tools again instead of producing the final analysis
   const round2Messages: unknown[] = [
     { role: 'system', content: FINAL_ANALYSIS_PROMPT },
     { role: 'user', content: question },
@@ -350,12 +354,12 @@ export async function analyzeWithCube(
 
   const msg2 = res2.choices?.[0]?.message ?? { content: null };
 
-  // 防御：如果 LLM 仍然试图调用工具（不应发生，已不传 tools），明确提示
+  // Defense: if the LLM still tries to call a tool (should not happen since tools are not passed), state it clearly
   const toolCalls2 = (msg2 as { tool_calls?: unknown[] }).tool_calls;
   if (toolCalls2 && toolCalls2.length > 0) {
     return {
       analysis:
-        '模型在第二轮仍尝试调用工具，未能生成分析报告。请重试或更换模型。',
+        'The model attempted to call a tool again in the second round and failed to produce an analysis report. Please retry or switch the model.',
     };
   }
 
@@ -379,7 +383,7 @@ export async function analyzeWithCube(
   const result: AnalysisContent = {
     analysis:
       cleaned ||
-      '查询已完成，但模型未能生成分析报告（返回内容为空）。请重试或更换模型。',
+      'The query completed, but the model failed to generate an analysis report (empty response). Please retry or switch the model.',
   };
   const extractedChart = extractChartFromMarkdown(result.analysis, question);
   if (extractedChart) {

@@ -31,9 +31,9 @@ export interface ChatError {
 }
 
 /**
- * 调用 /api/chat 代理端点发送消息历史，收到 AI 回复文本。
- * - 未配置 API Key：返回占位提示（不抛错）
- * - 网络/服务错误：在 message 中携带错误描述（不抛错）
+ * Calls the /api/chat proxy endpoint with the message history and receives the AI reply text.
+ * - No API Key configured: returns a placeholder hint (does not throw)
+ * - Network/service error: carries the error description in the message (does not throw)
  */
 export async function sendChatMessage(
   messages: Message[],
@@ -43,7 +43,7 @@ export async function sendChatMessage(
   if (!provider || !provider.apiKey || !provider.apiKey.trim()) {
     return {
       content:
-        "请先在「设置」中配置 AI 服务的 API Key、Base URL 与模型，然后再次提问。配置完成后，我会通过真实的 AI Provider 为您回答。",
+        "Please configure the AI provider's API Key, Base URL, and model in Settings first, then ask again. Once configured, I will answer you through the real AI provider.",
       error: { code: "missing_key", message: "API Key is not configured" },
     };
   }
@@ -60,13 +60,13 @@ export async function sendChatMessage(
     try {
       data = await res.json();
     } catch {
-      // 非 JSON 错误体
+      // Non-JSON error body
     }
 
     if (!res.ok) {
       const detail = data?.error || `HTTP ${res.status}`;
       return {
-        content: `请求 AI 服务失败：${detail}`,
+        content: `Failed to call the AI service: ${detail}`,
         error: { code: "api", message: detail },
       };
     }
@@ -80,7 +80,7 @@ export async function sendChatMessage(
     }
     if (!content) {
       return {
-        content: "AI 服务返回了空内容，请稍后重试或更换模型。",
+        content: "The AI service returned empty content. Please retry later or switch the model.",
         error: { code: "empty", message: "Empty response" },
       };
     }
@@ -89,7 +89,7 @@ export async function sendChatMessage(
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     return {
-      content: `网络错误：${detail}`,
+      content: `Network error: ${detail}`,
       error: { code: "network", message: detail },
     };
   }

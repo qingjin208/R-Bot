@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { Message, ProviderConfig } from "@/app/types";
 import { analyzeWithCube } from "@/app/lib/ai-analyze";
 
-// 强制使用 Node.js runtime，便于进行流式响应和 HTTP 代理
+// Force the Node.js runtime to enable streaming responses and HTTP proxying
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ content });
   } catch (err) {
     return NextResponse.json(
-      { error: `请求失败: ${err instanceof Error ? err.message : String(err)}` },
+      { error: `Request failed: ${err instanceof Error ? err.message : String(err)}` },
       { status: 502 }
     );
   }

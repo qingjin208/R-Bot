@@ -66,8 +66,8 @@ export async function cubeLoad(query: CubeQuery): Promise<CubeResponse> {
   });
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Cube.js 查询失败' }));
-    throw new Error(err.error || `Cube.js 查询失败 (${res.status})`);
+    const err = await res.json().catch(() => ({ error: 'Cube.js query failed' }));
+    throw new Error(err.error || `Cube.js query failed (${res.status})`);
   }
 
   return res.json();

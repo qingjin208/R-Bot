@@ -27,9 +27,9 @@ const conversationData: Record<string, { userQuery: string; aiReply: string }> =
   "week-2": { userQuery: "conv5UserQuery", aiReply: "conv5AiReply" },
 };
 
-// 与 Provider 通信时携带的 system 角色提示，让模型扮演 R-bot 数据分析助手
+// System prompt sent to the Provider, making the model act as the R-bot data analysis assistant
 const SYSTEM_PROMPT =
-  "你是 R-bot，一个专注业务数据分析的 AI 助手。请用简洁、结构化的中文回答，必要时分点列出关键结论。不要输出任何代码（如 Python、JavaScript、SQL 等），用户只关心数据和结论。";
+  "You are R-bot, an AI assistant focused on business data analysis. ALWAYS reply in English only. Do NOT match the user's input language. Even if the user writes in Chinese or any other language, you MUST respond in English. Reply concisely and in a structured way, listing key conclusions as bullet points when needed. Do not output any code (such as Python, JavaScript, SQL, etc.); the user only cares about the data and conclusions.";
 
 export default function Home() {
   const { t } = useI18n();
@@ -120,7 +120,7 @@ export default function Home() {
         const aiMsg: Message = {
           id: `msg-${Date.now()}-ai`,
           role: "assistant",
-          content: `请求出错：${detail}`,
+          content: `Request error: ${detail}`,
           timestamp: Date.now(),
         };
         setMessagesByConv((prev) => ({

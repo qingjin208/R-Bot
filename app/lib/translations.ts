@@ -7,7 +7,7 @@ export const locales: { value: Locale; label: string; flag: string }[] = [
   { value: "de", label: "Deutsch", flag: "🇩🇪" },
 ];
 
-export const defaultLocale: Locale = "zh";
+export const defaultLocale: Locale = "en";
 
 export type TranslationKey = keyof typeof translations.zh;
 
@@ -18,6 +18,8 @@ export const translations: Translations = {
     // Sidebar
     appName: "R-bot",
     appTagline: "DATA INSIGHT",
+    welcomeTitle: "欢迎使用 R-bot",
+    welcomeSubtitle: "向我提问关于销售数据的问题，例如营收、订单、客户分析、产品表现等。",
     newChat: "新建对话",
     today: "今天",
     thisWeek: "本周",
@@ -96,6 +98,8 @@ export const translations: Translations = {
   en: {
     appName: "R-bot",
     appTagline: "DATA INSIGHT",
+    welcomeTitle: "Welcome to R-bot",
+    welcomeSubtitle: "Ask me anything about your sales data — revenue, orders, customer analysis, product performance, and more.",
     newChat: "New Chat",
     today: "Today",
     thisWeek: "This Week",
@@ -162,6 +166,8 @@ export const translations: Translations = {
   fr: {
     appName: "R-bot",
     appTagline: "DATA INSIGHT",
+    welcomeTitle: "Bienvenue sur R-bot",
+    welcomeSubtitle: "Posez vos questions sur vos données de vente — chiffre d'affaires, commandes, analyse clients, performance produits, etc.",
     newChat: "Nouvelle conversation",
     today: "Aujourd'hui",
     thisWeek: "Cette semaine",
@@ -228,6 +234,8 @@ export const translations: Translations = {
   de: {
     appName: "R-bot",
     appTagline: "DATA INSIGHT",
+    welcomeTitle: "Willkommen bei R-bot",
+    welcomeSubtitle: "Stellen Sie Fragen zu Ihren Verkaufsdaten — Umsatz, Bestellungen, Kundenanalyse, Produktleistung und mehr.",
     newChat: "Neue Konversation",
     today: "Heute",
     thisWeek: "Diese Woche",
