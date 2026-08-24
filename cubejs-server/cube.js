@@ -1,6 +1,7 @@
 const process = require('process');
+require('dotenv').config({ path: ['.env.local', '.env'] });
 
-process.env.CUBEJS_JWT_SECRET = process.env.CUBEJS_JWT_SECRET;
+process.env.CUBEJS_JWT_SECRET = process.env.CUBEJS_JWT_SECRET || 'your-secret-key';
 process.env.port = process.env.PORT || '4000';
 process.env.CUBEJS_DB_TYPE = 'postgres';
 

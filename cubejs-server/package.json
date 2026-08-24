@@ -9,6 +9,7 @@
   "dependencies": {
     "@cubejs-backend/postgres-driver": "^1.4.4",
     "@cubejs-backend/server": "^1.4.4",
+    "dotenv": "^16.4.5",
     "pg": "^8.13.0"
   }
 }
