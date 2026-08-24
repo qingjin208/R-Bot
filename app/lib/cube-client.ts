@@ -1,8 +1,12 @@
 // Server-side only — imported by ai-analyze.ts (which lives in an API Route).
 // Do NOT import this file from client components.
 
+import jwt from 'jsonwebtoken';
+
 const CUBEJS_API_URL =
   process.env.CUBEJS_API_URL || 'http://localhost:4000/cubejs-api/v1';
+const CUBEJS_JWT_SECRET =
+  process.env.CUBEJS_JWT_SECRET || 'your-secret-key';
 
 export interface CubeQuery {
   measures: string[];
@@ -51,7 +55,10 @@ export async function cubeLoad(query: CubeQuery): Promise<CubeResponse> {
 
   const res = await fetch(`${CUBEJS_API_URL}/load`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-cubejs-token': jwt.sign({}, CUBEJS_JWT_SECRET),
+    },
     body: JSON.stringify({ query: payloadQuery }),
   });
 
