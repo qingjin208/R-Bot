@@ -57,6 +57,9 @@ export async function cubeLoad(query: CubeQuery): Promise<CubeResponse> {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      // Standard auth header — required when Cube runs in production mode.
+      // x-cubejs-token alone is rejected with 403 "Authorization header isn't set".
+      Authorization: `Bearer ${jwt.sign({}, CUBEJS_JWT_SECRET)}`,
       'x-cubejs-token': jwt.sign({}, CUBEJS_JWT_SECRET),
     },
     body: JSON.stringify({ query: payloadQuery }),
