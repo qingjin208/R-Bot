@@ -24,7 +24,6 @@ const server = new CubejsServer({
     });
   },
   schemaPath: 'schema',
-  jwtSecret: process.env.CUBEJS_JWT_SECRET || 'your-secret-key',
   apiSecret: process.env.CUBEJS_JWT_SECRET || 'your-secret-key',
 });
 
