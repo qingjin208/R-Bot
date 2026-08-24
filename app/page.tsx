@@ -35,7 +35,9 @@ export default function Home() {
   const { t } = useI18n();
   const [activeConvId, setActiveConvId] = useState("today-1");
   const [conversations, setConversations] = useState<Conversation[]>(initialConversations);
-  const [messages, setMessages] = useState<Message[]>([]);
+  // 消息按会话 ID 分别存储，切换会话不再丢失
+  const [messagesByConv, setMessagesByConv] = useState<Record<string, Message[]>>({});
+  const messages = messagesByConv[activeConvId] ?? [];
   const [isTyping, setIsTyping] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -51,7 +53,6 @@ export default function Home() {
 
   const handleSelectConversation = useCallback((id: string) => {
     setActiveConvId(id);
-    setMessages([]);
     setIsTyping(false);
   }, []);
 
@@ -60,12 +61,15 @@ export default function Home() {
     const newConv: Conversation = { id: newId, titleKey: "newConversation", active: true, group: "today" };
     setConversations((prev) => [newConv, ...prev]);
     setActiveConvId(newId);
-    setMessages([]);
     setIsTyping(false);
   }, []);
 
   const sendMessage = useCallback(
     async (text: string) => {
+      // 捕获发送时所在的会话 ID：等待回复期间用户切换会话，
+      // 消息仍应写入当初发起提问的那个会话
+      const convId = activeConvId;
+
       const userMsg: Message = {
         id: `msg-${Date.now()}`,
         role: "user",
@@ -74,11 +78,11 @@ export default function Home() {
       };
 
       // 保存本次请求对应的"上一份消息列表"，便于请求体按历史顺序构造
-      const previousMessages = messages;
+      const previousMessages = messagesByConv[convId] ?? [];
 
-      // 立即把用户消息推入 UI
+      // 立即把用户消息推入对应会话
       const nextAllMessages: Message[] = [...previousMessages, userMsg];
-      setMessages(nextAllMessages);
+      setMessagesByConv((prev) => ({ ...prev, [convId]: nextAllMessages }));
       setIsTyping(true);
 
       if (typingTimerRef.current) {
@@ -103,7 +107,10 @@ export default function Home() {
           content,
           timestamp: Date.now(),
         };
-        setMessages((prev) => [...prev, aiMsg]);
+        setMessagesByConv((prev) => ({
+          ...prev,
+          [convId]: [...(prev[convId] ?? []), aiMsg],
+        }));
       } catch (err) {
         // 用户主动取消时不显示错误
         if (err instanceof Error && err.name === "AbortError") {
@@ -116,14 +123,17 @@ export default function Home() {
           content: `请求出错：${detail}`,
           timestamp: Date.now(),
         };
-        setMessages((prev) => [...prev, aiMsg]);
+        setMessagesByConv((prev) => ({
+          ...prev,
+          [convId]: [...(prev[convId] ?? []), aiMsg],
+        }));
       } finally {
         setIsTyping(false);
         typingTimerRef.current = null;
         abortControllerRef.current = null;
       }
     },
-    [messages]
+    [messagesByConv, activeConvId]
   );
 
   const handleStop = useCallback(() => {

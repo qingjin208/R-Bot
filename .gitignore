@@ -26,6 +26,10 @@
 
 # debug
 npm-debug.log*
+
+# sqlite data (migrated to Neon)
+*.db
+*.db-*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*

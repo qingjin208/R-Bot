@@ -52,17 +52,17 @@ cube(`Orders`, {
       title: `订单日期`,
     },
     orderDateMonth: {
-      sql: `strftime('%Y-%m', order_date)`,
+      sql: `substring(order_date from 1 for 7)`,
       type: `string`,
       title: `订单月份`,
     },
     orderDateQuarter: {
-      sql: `strftime('%Y-Q', order_date)`,
+      sql: `substring(order_date from 1 for 4) || '-Q' || extract(quarter from order_date::date)`,
       type: `string`,
       title: `订单季度`,
     },
     orderDateYear: {
-      sql: `strftime('%Y', order_date)`,
+      sql: `substring(order_date from 1 for 4)`,
       type: `string`,
       title: `订单年份`,
     },
