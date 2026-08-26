@@ -7,26 +7,73 @@ import { CubeQuery, CubeResponse, cubeLoad } from './cube-client';
 // ──────────────────────────────────────────────
 // System prompt describing the data schema + output rules
 // ──────────────────────────────────────────────
-const SYSTEM_PROMPT = `You are a business data analysis assistant focused on answering questions with data. You have a data analysis tool to query sales data.
+const SYSTEM_PROMPT = `You are a data analysis assistant for a probiotic (DFM) cattle trial data platform. You help analyze clinical trial results of animal-feed additives (probiotics, rumen buffers, yeast cultures). You have a cube_query tool to query the trial data.
 
-The data warehouse contains the following information:
+The data warehouse contains the following cubes:
 
-Table: Orders (order table, 2023-01-01 to 2024-12-31, about 8851 orders)
+Cube: TrialResult (core metric data, pre-joined flattened view, ~240 results across 10 trials)
+  This is the main cube for analysis. It joins trials, products, sites, treatment groups, and metrics.
   Measures:
-  - Orders.totalAmount: total sales amount (SUM)
-  - Orders.orderCount: order count (COUNT)
-  - Orders.avgAmount: average order value (AVG)
-  - Orders.totalQuantity: total quantity sold (SUM)
+  - TrialResult.metricValueAvg: average metric value (AVG)
+  - TrialResult.metricValueSum: sum of metric values (SUM)
+  - TrialResult.metricValueMin: minimum metric value (MIN)
+  - TrialResult.metricValueMax: maximum metric value (MAX)
+  - TrialResult.stdDev: standard deviation
+  - TrialResult.pValueAvg: p-value (statistical significance, < 0.05 = significant)
+  - TrialResult.sampleSize: sample size (n)
+  - TrialResult.resultCount: count of result records
   Dimensions:
-  - Orders.region: region (North/ East/ South/ Central/ Southwest/ Northwest China)
-  - Orders.orderDateMonth: order month (aggregated as YYYY-MM)
-  - Orders.orderDateQuarter: order quarter (aggregated as YYYY-Q)
-  - Orders.orderDateYear: order year (aggregated as YYYY)
-  - Orders.status: order status (completed/ shipped/ pending/ cancelled)
-  - Orders.productCategory: product category (Electronics/ Office Furniture/ Books/ Digital Accessories)
-  - Orders.customerName: customer name
-  - Orders.customerCity: customer city
-  - Orders.productName: product name
+  - TrialResult.trialCode: trial code (e.g. PROT-2024-001)
+  - TrialResult.productName: product name (XYZ Probiotic DFM / XYZ Rumen Buffer / ABC Yeast Culture)
+  - TrialResult.siteName: trial site name
+  - TrialResult.groupType: CONTROL / TREATMENT / POSITIVE_CONTROL
+  - TrialResult.doseRate: dose rate (numeric)
+  - TrialResult.metricCode: metric code — ADG (avg daily gain kg), GF (gain:feed ratio), HCW (hot carcass weight kg), DMI (dry matter intake kg), MORB (morbidity %), MORT (mortality %), DRESS (dressing %), FCR (feed conversion ratio), RUMEN_PH (rumen pH), ECON (economic return $/head)
+  - TrialResult.metricCategory: metric category
+  - TrialResult.higherIsBetter: true/false — whether higher values are better
+  - TrialResult.measurementDate: measurement date
+
+Cube: Trials (overview of all trials, ~10 trials)
+  Measures:
+  - Trials.trialCount: count of trials
+  Dimensions:
+  - Trials.trialCode: trial code
+  - Trials.productName: product name
+  - Trials.siteName: trial site
+  - Trials.siteKind: company / customer_farm / university
+  - Trials.status: completed / active / planned
+  - Trials.dataClassification: public / internal / customer_confidential
+  - Trials.designType: RCT / Block / Paired
+  - Trials.sponsor: sponsor name
+  - Trials.startDate: start date
+  - Trials.endDate: end date
+
+Cube: TreatmentGroup (treatment group details, ~24 groups)
+  Measures:
+  - TreatmentGroup.groupCount: count of groups
+  - TreatmentGroup.animalCount: total animals (SUM)
+  - TreatmentGroup.doseRateAvg: average dose rate
+  Dimensions:
+  - TreatmentGroup.groupType: CONTROL / TREATMENT / POSITIVE_CONTROL
+  - TreatmentGroup.doseRate: dose rate
+  - TreatmentGroup.durationDays: trial duration in days
+  - TreatmentGroup.cattleCategory: cattle category (e.g. finishing beef, dairy)
+  - TreatmentGroup.breed: cattle breed
+
+Cube: PublicEvidence (publicly available evidence, including published papers)
+  Measures:
+  - PublicEvidence.liftPctAvg: average lift percentage (treatment improvement over control)
+  - PublicEvidence.controlValueAvg: control group average value
+  - PublicEvidence.treatmentValueAvg: treatment group average value
+  - PublicEvidence.evidenceCount: count of evidence items
+  Dimensions:
+  - PublicEvidence.evidenceType: trial / publication
+  - PublicEvidence.productName: product name
+  - PublicEvidence.metricCode: metric code
+  - PublicEvidence.unit: measurement unit
+  - PublicEvidence.title: paper title
+  - PublicEvidence.journal: journal name
+  - PublicEvidence.doi: DOI
 
 When the user asks a data-related question, use the cube_query tool to query data, then provide an analysis report based on the results.
 If the user is just chatting or greeting, reply directly without using the tool.
@@ -52,7 +99,7 @@ When chatting, reply with plain text directly; no JSON needed.`;
 // ──────────────────────────────────────────────
 // Round 2 prompt — tool call is DONE, force final JSON analysis
 // ──────────────────────────────────────────────
-const FINAL_ANALYSIS_PROMPT = `You are a business data analysis assistant. The cube_query tool has already been called, and the real query results are attached as tool messages in the conversation.
+const FINAL_ANALYSIS_PROMPT = `You are a data analysis assistant for a probiotic (DFM) cattle trial data platform. The cube_query tool has already been called, and the real query results are attached as tool messages in the conversation.
 
 Your task: write the final analysis report based on this real data. Do not call any tool again; output conclusions directly.
 
@@ -82,7 +129,7 @@ const CUBE_TOOL = {
   function: {
     name: 'cube_query',
     description:
-      'Query sales data analysis results. Use this tool when the user asks about sales amount, orders, customers, products, trends, or other data-related questions.',
+      'Query cattle trial data analysis results. Use this tool when the user asks about trial results, product efficacy, treatment comparisons, metrics (ADG, GF, HCW, etc.), or other data-related questions.',
     parameters: {
       type: 'object',
       properties: {
@@ -90,20 +137,20 @@ const CUBE_TOOL = {
           type: 'array',
           items: { type: 'string' },
           description:
-            'Measures to query, e.g. Orders.totalAmount, Orders.orderCount, Orders.avgAmount, Orders.totalQuantity',
+            'Measures to query, e.g. TrialResult.metricValueAvg, TrialResult.metricValueSum, TrialResult.pValueAvg, TrialResult.sampleSize, TrialResult.resultCount, TrialResult.stdDev, Trials.trialCount, TreatmentGroup.animalCount, PublicEvidence.liftPctAvg',
         },
         dimensions: {
           type: 'array',
           items: { type: 'string' },
           description:
-            'Dimensions to group by, e.g. Orders.region, Orders.orderDateMonth, Orders.orderDateQuarter, Orders.orderDateYear, Orders.status, Orders.productCategory, Orders.customerName, Orders.productName, Orders.customerCity',
+            'Dimensions to group by, e.g. TrialResult.productName, TrialResult.trialCode, TrialResult.groupType, TrialResult.metricCode, TrialResult.siteName, TrialResult.measurementDate, Trials.status, Trials.siteKind, TreatmentGroup.durationDays, PublicEvidence.evidenceType',
         },
         filters: {
           type: 'array',
           items: {
             type: 'object',
             properties: {
-              member: { type: 'string', description: 'Filter field, e.g. Orders.status' },
+              member: { type: 'string', description: 'Filter field, e.g. TrialResult.groupType' },
               operator: {
                 type: 'string',
                 description: 'Operator: equals/ notEquals/ greaterThan/ lessThan/ in',
@@ -117,7 +164,7 @@ const CUBE_TOOL = {
         order: {
           type: 'object',
           properties: {
-            measure: { type: 'string', description: 'Sort field, e.g. Orders.totalAmount' },
+            measure: { type: 'string', description: 'Sort field, e.g. TrialResult.metricValueAvg' },
             direction: { type: 'string', enum: ['asc', 'desc'] },
           },
           description: 'Sort rule',

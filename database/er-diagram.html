@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>益生菌对牛影响 · 试验数据平台 ER 图（v3 区域+报告批次）</title>
+<style>
+  :root {
+    --bg: #1e1f24;
+    --panel: #26272e;
+    --border: #3a3b44;
+    --text: #e8e9ed;
+    --muted: #9aa0ac;
+    --accent: #5b8def;
+    --tag-a: #4f7cd6;
+    --tag-b: #3fa37a;
+    --tag-c: #c9903f;
+    --tag-d: #a06bc0;
+    --tag-e: #d2607a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    padding: 24px;
+    line-height: 1.6;
+  }
+  .container { max-width: 1500px; margin: 0 auto; }
+  h1 { font-size: 22px; margin-bottom: 6px; }
+  .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+  .tag {
+    font-size: 13px; padding: 4px 12px; border-radius: 12px;
+    border: 1px solid var(--border); background: var(--panel);
+  }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px; margin-bottom: 20px;
+  }
+  .card h2 { font-size: 16px; margin-bottom: 10px; }
+  .card p, .card li { font-size: 14px; color: var(--muted); }
+  .card ul { margin-left: 18px; }
+  .card li { margin-bottom: 4px; }
+  .card code { color: var(--accent); font-family: Consolas, monospace; }
+  .mermaid-wrap {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px; overflow-x: auto; text-align: center;
+  }
+  .mermaid { display: flex; justify-content: center; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; }
+  td:first-child { font-family: Consolas, monospace; color: var(--accent); }
+  pre.sql { background: #16171b; border: 1px solid var(--border); border-radius: 8px; padding: 14px; overflow-x: auto; color: #cdd3df; font-size: 13px; font-family: Consolas, monospace; }
+  .note { font-size: 13px; color: var(--muted); margin-top: 12px; }
+  .note b { color: var(--text); }
+  @media (max-width: 768px) { body { padding: 12px; } }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>益生菌对牛影响 · 试验数据平台 ER 图（v4：布局优化 + 冗余审查）</h1>
+  <div class="subtitle">核心目的：调研 XYZ 益生菌<b>对牛的影响</b>，并支撑销售代表从数据库直接生成证据报告。本版：删除拜访记录（VISIT），改由 <b>REGION</b> 同时管辖销售代表与农场（区域内多对多）；新增 <b>REPORT + REPORT_ITEM</b>（报告批次）取代原“拜访材料”。（v4：erDiagram 改 LR 布局，并标注冗余/一致性约束）</div>
+
+  <div class="legend">
+    <span class="tag"><span class="dot" style="background:var(--tag-a)"></span>区域与人员域</span>
+    <span class="tag"><span class="dot" style="background:var(--tag-b)"></span>产品与试验域</span>
+    <span class="tag"><span class="dot" style="background:var(--tag-c)"></span>指标字典域</span>
+    <span class="tag"><span class="dot" style="background:var(--tag-d)"></span>外部证据域</span>
+    <span class="tag"><span class="dot" style="background:var(--tag-e)"></span>报告批次域</span>
+    <span class="tag"><span class="dot" style="background:#7a7f8c"></span>个体牛只域</span>
+  </div>
+
+  <div class="mermaid-wrap">
+    <pre class="mermaid">
+erDiagram
+    %% ===== A. 区域与人员/农场域 =====
+    REGION["销售区域"] {
+        int region_id PK "区域主键"
+        varchar region_code UK "区域代码 如 SW"
+        varchar region_name "区域名称 如 South West"
+    }
+    SALES_REP["销售代表"] {
+        int rep_id PK "销售主键"
+        int region_id FK "所属区域"
+        varchar rep_name "销售代表姓名"
+        varchar email "联系邮箱"
+        timestamp created_at "创建时间"
+    }
+    CUSTOMER["农场客户"] {
+        int customer_id PK "客户主键"
+        int region_id FK "所属区域"
+        varchar customer_name "客户名称 如 Bar T Cattle"
+        varchar customer_type "客户类型 feedlot/dairy/ranch"
+        varchar city "所在城市 如 Hereford"
+        varchar state "所在州 如 TX"
+        timestamp created_at "创建时间"
+        timestamp deleted_at "软删除标记(null=有效)"
+    }
+    CONTACT["联系人"] {
+        int contact_id PK "联系人主键"
+        int customer_id FK "所属农场客户"
+        varchar contact_name "联系人姓名"
+        varchar role "角色 肥育场经理/咨询兽医"
+        varchar credential "资质 如 DVM(兽医)"
+    }
+
+    %% ===== B. 产品与试验域（益生菌对牛的影响主线）=====
+    PRODUCT["产品"] {
+        int product_id PK "产品主键"
+        varchar product_name "产品名称 如 XYZ 益生菌"
+        varchar category "产品类别 如 DFM probiotic"
+        varchar active_strain "活性菌株"
+        varchar target_species "目标物种 如 肉牛"
+        timestamp created_at "创建时间"
+        timestamp deleted_at "软删除标记"
+    }
+    PRODUCT_BATCH["产品批号"] {
+        int batch_id PK "批号主键"
+        int product_id FK "所属产品"
+        varchar batch_no UK "生产批号/lot"
+        date manufacture_date "生产日期"
+        date expiry_date "有效期至"
+        decimal cfu_potency "CFU/g 效价(逐批波动)"
+        varchar qc_status "质检状态 合格/待检/不合格"
+    }
+    TRIAL["试验"] {
+        int trial_id PK "试验主键"
+        varchar trial_code UK "试验编号"
+        int product_id FK "试验产品"
+        int site_id FK "试验场地"
+        int batch_id FK "所用产品批次"
+        date start_date "试验开始日期"
+        date end_date "试验结束日期"
+        varchar design_type "设计类型 RCT/区组/配对"
+        varchar control_type "对照类型 阴性/阳性"
+        boolean randomized "是否随机分组"
+        varchar blinding "盲法 单盲/双盲/开放"
+        varchar sponsor "发起方 内部/大学/第三方"
+        varchar status "状态 planned/active/completed"
+        varchar data_classification "数据分级 public/internal/customer_confidential"
+        varchar protocol_ref "试验方案编号"
+    }
+    TRIAL_SITE["试验场地"] {
+        int site_id PK "场地主键"
+        varchar site_name "场地名称"
+        varchar site_kind "场地性质 company/customer_farm/university"
+        int customer_id FK "农场客户(农场试验时必填)"
+        varchar city "所在城市"
+        varchar state "所在州"
+        int capacity_head "存栏容量(头)"
+    }
+    TRIAL_BATCH["试验亚批次"] {
+        int trial_batch_id PK "亚批次主键"
+        int trial_id FK "所属试验"
+        varchar batch_no "入组批次号"
+        date enrollment_date "入组日期"
+        varchar cohort_label "批次/群组标签"
+        int animal_count "本批次牛只数"
+    }
+    TREATMENT_GROUP["处理组"] {
+        int group_id PK "处理组主键"
+        int trial_id FK "所属试验"
+        varchar group_type "组别 CONTROL/TREATMENT/POSITIVE_CONTROL"
+        decimal dose_rate "添加剂量数值"
+        varchar dose_unit "剂量单位 g/ton 或 CFU/head"
+        varchar admin_route "给药途径 拌料(TMR)/饮水/灌服"
+        varchar frequency "给药频次 每日/每周"
+        int duration_days "试验持续天数"
+        int animal_count "本组牛只数"
+        varchar cattle_category "牛群类别 犊牛/阉牛/母牛"
+        varchar breed "品种"
+    }
+    TRIAL_RESULT["试验结果"] {
+        int result_id PK "结果主键"
+        int trial_id FK "所属试验(冗余 便于RLS与维度 须等于group所属试验)"
+        int group_id FK "所属处理组"
+        int metric_id FK "指标(→指标字典)"
+        decimal metric_value "指标观测值"
+        int n "样本量"
+        decimal std_dev "标准差"
+        decimal p_value "显著性 p 值"
+        decimal ci_lower "置信区间下界"
+        decimal ci_upper "置信区间上界"
+        date measurement_date "测量日期"
+        int period_day "试验第几天测量"
+    }
+
+    %% ===== C. 指标字典域（规范化，杜绝自由文本）=====
+    METRIC_DEFINITION["指标字典"] {
+        int metric_id PK "指标主键"
+        varchar metric_code UK "指标代码 ADG/G:F/HCW..."
+        varchar category "指标类别 growth/health/carcass"
+        varchar unit "计量单位"
+        varchar description "指标说明"
+        boolean higher_is_better "越大越好?(true/false)"
+    }
+
+    %% ===== D. 外部证据域 =====
+    PUBLICATION["行业文献"] {
+        int publication_id PK "文献主键"
+        varchar title "文献标题"
+        varchar journal "期刊/出版物"
+        int pub_year "发表年份"
+        varchar study_type "研究类型 RCT/对照/荟萃/综述"
+        varchar doi UK "数字对象唯一标识"
+    }
+    PRODUCT_PUBLICATION["产品-文献关联"] {
+        int product_id PK, FK "产品主键"
+        int publication_id PK, FK "文献主键"
+        varchar evidence_note "支撑要点说明"
+    }
+
+    %% ===== E. 报告批次域（取代原“拜访材料”）=====
+    REPORT["报告批次"] {
+        int report_id PK "报告主键"
+        int rep_id FK "生成报告的销售"
+        int region_id FK "报告归属区域"
+        varchar batch_no UK "报告批次号"
+        varchar data_classification "报告分级(取所含条目中最敏感级 须一致)"
+        timestamp generated_at "报告生成时间"
+        varchar notes "报告说明/备注"
+    }
+    REPORT_ITEM["报告条目"] {
+        int item_id PK "条目主键"
+        int report_id FK "所属报告"
+        int trial_id FK "引用内部试验(可空)"
+        int publication_id FK "引用外部文献(可空)"
+    }
+
+    %% ===== F. 个体牛只域（可追溯 + 方差分析）=====
+    ANIMAL["牛只"] {
+        int animal_id PK "牛只主键"
+        int group_id FK "所属处理组"
+        int batch_id FK "入组亚批次"
+        varchar ear_tag UK "耳标编号"
+        varchar sex "性别 M/F"
+        decimal entry_weight "入场体重(kg)"
+        decimal exit_weight "出栏体重(kg)"
+        varchar status "状态 alive/culled/died"
+    }
+    WEIGH_EVENT["称重事件"] {
+        int weigh_id PK "称重主键"
+        int animal_id FK "所属牛只"
+        date weigh_date "称重日期"
+        decimal weight "体重(kg)"
+        varchar event_type "称重类型 入场/中期/出栏"
+    }
+
+    %% ===== 关系 =====
+    %% 区域视角：一个区域内 多名销售 ↔ 多个农场，经由 REGION 形成多对多
+    REGION ||--o{ SALES_REP : "管辖销售"
+    REGION ||--o{ CUSTOMER : "覆盖农场"
+    CUSTOMER ||--o{ CONTACT : "拥有"
+    CUSTOMER ||--o{ TRIAL_SITE : "拥有试验场地"
+    SALES_REP ||--o{ REPORT : "生成报告"
+    REGION ||--o{ REPORT : "归属"
+    REPORT ||--o{ REPORT_ITEM : "包含条目"
+
+    PRODUCT ||--o{ TRIAL : "开展"
+    PRODUCT ||--o{ PRODUCT_BATCH : "拥有批次"
+    PRODUCT_BATCH ||--o{ TRIAL : "用于试验"
+    TRIAL ||--o{ TRIAL_BATCH : "分批入组"
+    TRIAL_BATCH ||--o{ ANIMAL : "包含牛只"
+    TRIAL_SITE ||--o{ TRIAL : "承接"
+    TRIAL ||--o{ TREATMENT_GROUP : "包含"
+    TREATMENT_GROUP ||--o{ ANIMAL : "组成"
+    ANIMAL ||--o{ WEIGH_EVENT : "称重"
+    TREATMENT_GROUP ||--o{ TRIAL_RESULT : "产生"
+    TRIAL ||--o{ TRIAL_RESULT : "结果明细(冗余路径)"
+    METRIC_DEFINITION ||--o{ TRIAL_RESULT : "定义"
+    PRODUCT ||--o{ PRODUCT_PUBLICATION : "被支撑"
+    PUBLICATION ||--o{ PRODUCT_PUBLICATION : "支撑"
+
+    TRIAL ||--o{ REPORT_ITEM : "作为内部证据"
+    PUBLICATION ||--o{ REPORT_ITEM : "作为外部证据"
+
+    %% ===== 业务约束（落地为 CHECK / 默认）=====
+    %% • TREATMENT_GROUP.group_type CHECK IN ('CONTROL','TREATMENT','POSITIVE_CONTROL')
+    %% • TRIAL.end_date >= start_date
+    %% • TRIAL_RESULT CHECK (n>0 AND p_value BETWEEN 0 AND 1 AND ci_lower<=ci_upper)
+    %% • REPORT_ITEM CHECK (trial_id IS NOT NULL OR publication_id IS NOT NULL)
+    %% • TRIAL_SITE.site_kind = 'customer_farm' 时 customer_id 必填，且应落在该客户所属区域
+    %% • TRIAL.data_classification ∈ {public, internal, customer_confidential}；TRIAL_RESULT 继承父试验分级
+    %% • 两类证据需区分：① 第一方试验数据 = TRIAL+TRIAL_RESULT（含自有场地与农场现场）；② 第三方佐证 = PUBLICATION
+    %% • RLS：app_public 仅可见 data_classification='public' 的行；app_farm_owner 可见 public + 本客户 confidential；app_sales 全可见
+    %% • PRODUCT_BATCH.cfu_potency > 0，且 trial.batch_id 必须属于该 trial.product_id 对应产品
+    %% • 一致性：TRIAL.product_id 必须等于 TRIAL.batch_id → PRODUCT_BATCH.product_id（CHECK/触发器）
+    %% • 一致性：ANIMAL.batch_id → TRIAL_BATCH.trial_id 必须等于 ANIMAL.group_id → TREATMENT_GROUP.trial_id
+    %% • 一致性：TRIAL_RESULT.trial_id 必须等于 TRIAL_RESULT.group_id → TREATMENT_GROUP.trial_id（冗余外键，供 RLS/Cube 直接过滤）
+    %% • REPORT.data_classification 应保持与其所含条目引用 trial 的最敏感分级一致（由应用/触发器维护）
+    %% • 所有核心表含 created_at / deleted_at(软删除)；可变表建议另含 updated_at
+    </pre>
+  </div>
+
+  <div class="card">
+    <h2>本次变更说明（v2 → v3）</h2>
+    <ul>
+      <li><b>删除 VISIT（拜访记录）</b>：销售代表的数据全部来自数据库查询，不存在“拜访”事件表。原“拜访材料”升级为 <code>REPORT</code> + <code>REPORT_ITEM</code>（报告批次）。</li>
+      <li><b>区域接管对应关系</b>：<code>SALES_REP.region_id</code> 与 <code>CUSTOMER.region_id</code> 都指向 <code>REGION</code>。逻辑为：<b>一个区域内多名销售 ↔ 多个农场（多对多）</b>，由区域派生的覆盖关系。</li>
+      <li><b>新增报告批次</b>：<code>REPORT(batch_no, rep_id, region_id, generated_at)</code> 记录每次生成的证据包；<code>REPORT_ITEM</code> 把“内部试验 + 外部文献”按条目打包，对应“报告批次信息”。</li>
+      <li><b>两层“临床批次”建模</b>：
+        <ul>
+          <li><code>PRODUCT_BATCH</code>（产品批号/lot）：记录每个益生菌生产批次的 <code>cfu_potency</code> 效价、生产/有效期、QC 状态；<code>TRIAL.batch_id</code> 指向所用批次——这是抗生素/益生菌试验“批次=研究菌株与剂量一致性”的关键溯源。</li>
+          <li><code>TRIAL_BATCH</code>（试验亚批次/入组批次）：同一试验分批入组牛群（<code>enrollment_date / cohort_label / animal_count</code>），<code>ANIMAL.batch_id</code> 归属对应亚批次，支撑分批出数据与区组设计。</li>
+        </ul>
+      </li>
+      <li><b>保留</b>：CONTACT（农场联系人：肥育场经理/兽医）、ANIMAL、WEIGH_EVENT、METRIC_DEFINITION、审计与约束。</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>索引与汇总视图（面向“益生菌 vs 对照”报告）</h2>
+    <ul>
+      <li><code>TRIAL(product_id)</code>、<code>TRIAL(site_id)</code></li>
+      <li><code>TREATMENT_GROUP(trial_id)</code></li>
+      <li><code>TRIAL_RESULT(group_id, metric_id)</code> —— 复合索引，覆盖最热路径</li>
+      <li><code>TRIAL_RESULT(metric_id)</code> —— 跨试验同指标对比</li>
+      <li><code>METRIC_DEFINITION(metric_code) UNIQUE</code>、<code>PUBLICATION(doi) UNIQUE</code>、<code>ANIMAL(ear_tag) UNIQUE</code></li>
+      <li><code>REPORT(rep_id, region_id, batch_no)</code>、<code>REPORT_ITEM(report_id, trial_id, publication_id)</code></li>
+      <li>生产环境一律 <code>CREATE INDEX CONCURRENTLY</code>（不能在事务块内执行）。</li>
+    </ul>
+    <p style="margin-top:10px">核心汇总视图（对照组 vs 试验组）：</p>
+    <pre class="sql">
+CREATE VIEW v_trial_efficacy AS
+SELECT
+  p.product_name,
+  t.trial_code,
+  ts.site_name,
+  tg.group_type,
+  tg.dose_rate,
+  m.metric_code,
+  m.category,
+  m.higher_is_better,
+  tr.metric_value,
+  tr.n, tr.std_dev, tr.p_value, tr.ci_lower, tr.ci_upper,
+  tr.measurement_date
+FROM product p
+JOIN trial t               ON t.product_id = p.product_id
+JOIN trial_site ts        ON ts.site_id   = t.site_id
+JOIN treatment_group tg   ON tg.trial_id  = t.trial_id
+JOIN trial_result tr      ON tr.group_id  = tg.group_id
+JOIN metric_definition m  ON m.metric_id  = tr.metric_id
+WHERE p.deleted_at IS NULL;
+    </pre>
+    <p class="note"><b>下一步</b>：可基于此视图生成“试验组 vs 对照组 差值/百分比提升”的透视查询，直接喂给销售代表的报告；如需进一步产出完整 Postgres DDL（含 Up/Down 迁移与分区建议）请告知。</p>
+  </div>
+
+  <div class="card">
+    <h2>v5 优化审查（本轮已落地）</h2>
+    <p><b>已采纳的改动</b>：</p>
+    <ul>
+      <li><b>TRIAL_RESULT 冗余 <code>trial_id</code> 外键</b>：与 <code>group_id</code> 同属一个试验；RLS 与 Cube 维度可直接按 <code>trial.data_classification</code> 过滤，无需多跳 join 到 TREATMENT_GROUP。新增关系 <code>TRIAL ||--o{ TRIAL_RESULT</code>（结果明细 冗余路径），并在约束区注明一致性 CHECK。</li>
+      <li><b>REPORT.data_classification 标注为派生</b>：明确「取所含条目中最敏感级，须保持一致」，消除字段与条目分级的歧义。</li>
+    </ul>
+    <p style="margin-top:8px"><b>保留但需注意同步的冗余（非错误）</b>：</p>
+    <ul>
+      <li><code>TREATMENT_GROUP.dose_unit</code>：前有“补充字段”段落误置在此，实为剂量单位（g/ton、CFU/head），与 dose_rate 成对。</li>
+      <li><code>PUBLICATION.study_type</code>：RCT / 对照 / 荟萃 / 综述，供 Chatbot 按证据强度排序佐证。</li>
+      <li><code>ANIMAL.entry_weight / exit_weight</code> 与 <code>WEIGH_EVENT</code> —— ANIMAL 体重作为 WEIGH_EVENT 的缓存副本，由触发器/应用同步。</li>
+      <li><code>TREATMENT_GROUP.animal_count</code> / <code>TRIAL_BATCH.animal_count</code> 可由 COUNT(ANIMAL) 派生。</li>
+      <li><code>TRIAL_SITE.city/state</code> 与 <code>CUSTOMER.city/state</code> 农场现场时天然一致（可接受）。</li>
+      <li><code>TRIAL.product_id</code> 与 <code>TRIAL.batch_id→PRODUCT_BATCH.product_id</code> 一致性（CHECK）。</li>
+    </ul>
+    <p style="margin-top:8px"><b>未采纳（留给你定夺的可省略项）</b>：</p>
+    <ul>
+      <li><code>WEIGH_EVENT</code>：不做纵向生长曲线时，可仅靠 ANIMAL 的入场/出栏体重删掉。</li>
+      <li><code>TRIAL_BATCH</code>：单批次入组的简单试验可省略，牛只直接归属处理组。</li>
+      <li><code>REPORT_ITEM</code> 拆两张表：当前「trial_id / publication_id 可空 + CHECK 至少其一」已能表达，暂不拆。</li>
+    </ul>
+  </div>
+</div>
+
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: "dark",
+    themeVariables: {
+      background:  "#1e1f24",
+      primaryColor:  "#3a4150",
+      primaryTextColor: "#f5f6fa",
+      primaryBorderColor: "#5b8def",
+      secondaryColor:  "#2a2b32",
+      tertiaryColor:  "#26272e",
+      lineColor:  "#9aa0ac",
+      textColor:  "#e8e9ed",
+      fontSize: "14px"
+    },
+    er: {
+      diagramPadding: 24,
+      layoutDirection: "LR",
+      minEntityWidth: 170,
+      minEntityHeight: 70,
+      entityPadding: 18,
+      edgeLength: 120,
+      fontSize: 14
+    }
+  });
+</script>
+</body>
+</html>
